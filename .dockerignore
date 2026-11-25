@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# Secrets — NEVER bake into the image
+.env
+
+# Local runtime artifacts
+node_modules
+recordings
+data
+*.log
+*.mkv
+
+# Dev / CI
+.github
+deploy
+scripts
+
+# Docs
+README.md
+LICENSE

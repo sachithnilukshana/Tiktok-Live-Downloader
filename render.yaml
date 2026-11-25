@@ -1,0 +1,79 @@
+# Render.com Blueprint — TikTok LIVE Auto Recorder
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web            # "web" services get an HTTPS URL and a health-check
+    name: tiktok-live-auto-recorder
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+
+    # Render free tier — bump to "standard" for guaranteed uptime / more RAM
+    plan: starter
+
+    # Render sets PORT automatically; your app reads $PORT.
+    # Health-check is called every 30 s; a 200 within 5 s = healthy.
+    healthCheckPath: /health
+
+    # Persistent disk for recordings buffer & state (1 GB is usually plenty;
+    # recordings are deleted after B2 upload succeeds).
+    disk:
+      name: recorder-data
+      mountPath: /data
+      sizeGB: 5
+
+    # ── Environment Variables ────────────────────────────────────────────────
+    # Set sensitive values in the Render dashboard (Environment tab),
+    # NOT here. This file only sets safe defaults and documents every var.
+    envVars:
+
+      # --- Telegram ---
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false           # mark as secret; set via Render dashboard
+
+      - key: TELEGRAM_ALLOWED_USER_ID
+        sync: false
+
+      # --- Backblaze B2 ---
+      - key: B2_ENDPOINT
+        value: https://s3.us-west-004.backblazeb2.com   # change region if needed
+
+      - key: B2_REGION
+        value: us-west-004
+
+      - key: B2_BUCKET
+        sync: false           # set via dashboard
+
+      - key: B2_ACCESS_KEY_ID
+        sync: false
+
+      - key: B2_SECRET_ACCESS_KEY
+        sync: false
+
+      - key: B2_LINK_EXPIRY_SECONDS
+        value: "604800"       # 7 days
+
+      - key: B2_PREFIX
+        value: live-recordings
+
+      # --- Monitoring ---
+      - key: POLL_INTERVAL_SECONDS
+        value: "45"
+
+      - key: OFFLINE_CONFIRMATIONS
+        value: "2"
+
+      - key: MAX_CONCURRENT_RECORDINGS
+        value: "2"
+
+      # --- Paths / Runtime (set by Dockerfile; listed here for visibility) ---
+      - key: RECORDINGS_DIR
+        value: /data/recordings
+
+      - key: FFMPEG_PATH
+        value: ffmpeg
+
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: "8080"

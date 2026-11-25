@@ -1,0 +1,24 @@
+[Unit]
+Description=TikTok LIVE Auto Recorder Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tiktokrec
+WorkingDirectory=/opt/tiktok-live-auto-recorder
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/tiktok-live-auto-recorder/src/index.js
+Restart=always
+RestartSec=8
+KillSignal=SIGINT
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/tiktok-live-auto-recorder/data /opt/tiktok-live-auto-recorder/recordings
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
