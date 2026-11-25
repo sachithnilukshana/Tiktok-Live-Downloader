@@ -363,7 +363,7 @@ Try with a residential or cloud provider IP, or use a VPN/proxy exit node in a s
 - [x] Docker image runs as a non-root `recorder` user (UID 1001)
 - [x] No inbound ports opened beyond the health-check endpoint (internal use only)
 - [x] Use SSH key authentication on your VPS; disable password login
-- [ ] Rotate B2 and Telegram credentials immediately if accidentally exposed
+- [x] Rotate B2 and Telegram credentials immediately if accidentally exposed
 
 ---
 
