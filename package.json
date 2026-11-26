@@ -1,20 +1,40 @@
 {
   "name": "tiktok-live-auto-recorder",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Telegram-controlled TikTok LIVE recorder with Backblaze B2 storage",
+  "description": "Multi-device Telegram & Web-controlled TikTok LIVE auto-recorder with Backblaze B2 storage",
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node src/index.js",
-    "check": "node --check src/index.js && node --check src/bot.js && node --check src/monitor.js && node --check src/storage.js"
+    "check": "node --check src/index.js && node --check src/bot.js && node --check src/monitor.js && node --check src/storage.js && node --check src/api/server.js",
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate deploy",
+    "db:migrate:dev": "npx prisma migrate dev",
+    "migrate:v1": "node scripts/migrate.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.900.0",
     "@aws-sdk/lib-storage": "^3.900.0",
     "@aws-sdk/s3-request-presigner": "^3.900.0",
+    "@prisma/client": "^6.5.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
     "node-telegram-bot-api": "^0.66.0",
-    "tiktok-live-connector": "*"
+    "p-queue": "^8.1.0",
+    "socket.io": "^4.8.1",
+    "tiktok-live-connector": "*",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.5.0",
+    "vitest": "^3.0.8"
   }
 }

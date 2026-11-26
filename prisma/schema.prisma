@@ -1,0 +1,189 @@
+// TikTok Auto Live Downloader V2.0 — Prisma Schema
+// SQLite for dev/single-node; switch provider to "postgresql" for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  username     String       @unique
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(VIEWER)
+  enabled      Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  sessions     Session[]
+  auditEvents  AuditEvent[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Device {
+  id          String          @id @default(cuid())
+  name        String
+  hostname    String
+  os          String?
+  ipAddress   String?
+  secretHash  String          @unique
+  enabled     Boolean         @default(true)
+  lastSeen    DateTime?
+  version     String?
+  cpuPercent  Float?
+  ramPercent  Float?
+  diskPercent Float?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  creators    CreatorDevice[]
+  recordings  Recording[]
+}
+
+model Creator {
+  id         String          @id @default(cuid())
+  username   String          @unique
+  enabled    Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  devices    CreatorDevice[]
+  recordings Recording[]
+}
+
+model CreatorDevice {
+  creatorId  String
+  deviceId   String
+  assignedAt DateTime @default(now())
+  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@id([creatorId, deviceId])
+}
+
+model Recording {
+  id            String         @id @default(cuid())
+  username      String
+  deviceId      String?
+  startedAt     DateTime
+  finishedAt    DateTime?
+  durationSecs  Float?
+  bytes         BigInt?
+  width         Int?
+  height        Int?
+  fps           Float?
+  videoCodec    String?
+  audioCodec    String?
+  bitrate       Int?
+  container     String?
+  objectKey     String?
+  uploadStatus  UploadStatus   @default(PENDING)
+  thumbKey      String?
+  thumbUrl      String?
+  checksum      String?
+  isDuplicate   Boolean        @default(false)
+  duplicateOfId String?
+  url           String?
+  localPath     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tags          RecordingTag[]
+  device        Device?        @relation(fields: [deviceId], references: [id])
+  creator       Creator        @relation(fields: [username], references: [username])
+
+  @@index([username])
+  @@index([startedAt])
+  @@index([checksum])
+  @@index([uploadStatus])
+}
+
+model Tag {
+  id         String         @id @default(cuid())
+  name       String         @unique
+  color      String         @default("#8B5CF6")
+  createdAt  DateTime       @default(now())
+  recordings RecordingTag[]
+}
+
+model RecordingTag {
+  recordingId String
+  tagId       String
+  recording   Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([recordingId, tagId])
+}
+
+model StoragePolicy {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  retainDays  Int?
+  retainCount Int?
+  protectTags String   @default("[]")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Backup {
+  id        String       @id @default(cuid())
+  createdAt DateTime     @default(now())
+  sizeBytes BigInt?
+  status    BackupStatus @default(PENDING)
+  objectKey String?
+  verified  Boolean      @default(false)
+  checksum  String?
+  notes     String?
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  username   String?
+  action     String
+  resource   String?
+  resourceId String?
+  deviceId   String?
+  ipAddress  String?
+  success    Boolean  @default(true)
+  meta       String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([action])
+  @@index([userId])
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADING
+  DONE
+  FAILED
+}
+
+enum BackupStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
