@@ -16,6 +16,7 @@ export function setBot(instance) {
   bot = instance;
 }
 
+// Send Telegram notifications.
 async function notify(message) {
   if (!bot) return;
 
@@ -26,55 +27,98 @@ async function notify(message) {
       { disable_web_page_preview: true }
     );
   } catch (error) {
-    console.error('Telegram notification failed:', error.message);
+    console.error(
+      'Telegram notification failed:',
+      error.message
+    );
   }
 }
 
+// Create TikTok connection.
 function connectionFor(username) {
   return new TikTokLiveConnection(username, {
     fetchRoomInfoOnConnect: false
   });
 }
 
-// Extract available HTTPS HLS or FLV stream URL.
+// Extract HLS or FLV URL from nested TikTok room information.
 function extractStreamUrl(roomInfo) {
-  if (!roomInfo) return null;
+  if (!roomInfo || typeof roomInfo !== 'object') {
+    return null;
+  }
 
-  const stream = roomInfo.stream_url ||
-                 roomInfo.data?.stream_url ||
-                 {};
+  const candidates = [];
+  const visited = new WeakSet();
 
-  const directCandidates = [
-    stream.hls_pull_url,
-    stream.flv_pull_url,
-    roomInfo.hls_pull_url,
-    roomInfo.flv_pull_url
-  ];
+  function scan(value, path = '', depth = 0) {
+    if (depth > 12 || value == null) return;
 
-  for (const url of directCandidates) {
-    if (
-      typeof url === 'string' &&
-      url.startsWith('https://')
-    ) {
-      return url;
+    if (typeof value === 'string') {
+      const isStreamField =
+        /(hls|flv).*(pull|url)|(pull|url).*(hls|flv)/i.test(path);
+
+      if (!isStreamField) return;
+
+      try {
+        const parsed = new URL(value);
+
+        if (
+          ['https:', 'http:'].includes(parsed.protocol) &&
+          parsed.hostname
+        ) {
+          candidates.push({
+            url: value,
+            type: /hls/i.test(path) ? 'hls' : 'flv',
+            path
+          });
+        }
+      } catch {
+        // Ignore invalid URLs.
+      }
+
+      return;
+    }
+
+    if (typeof value !== 'object') return;
+    if (visited.has(value)) return;
+
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        scan(item, `${path}[${index}]`, depth + 1);
+      });
+
+      return;
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      scan(
+        child,
+        path ? `${path}.${key}` : key,
+        depth + 1
+      );
     }
   }
 
-  const maps = [
-    stream.hls_pull_url_map,
-    stream.flv_pull_url_map
-  ];
+  scan(roomInfo);
 
-  for (const map of maps) {
-    if (!map || typeof map !== 'object') continue;
+  // Prefer HLS, then FLV.
+  const selected =
+    candidates.find(item => item.type === 'hls') ||
+    candidates.find(item => item.type === 'flv');
 
-    const url = Object.values(map).find(value =>
-      typeof value === 'string' &&
-      value.startsWith('https://')
+  if (selected) {
+    console.log(
+      `Found ${selected.type.toUpperCase()} stream URL at: ${selected.path}`
     );
 
-    if (url) return url;
+    return selected.url;
   }
+
+  console.warn(
+    'No valid HLS/FLV URL found in TikTok room information.'
+  );
 
   return null;
 }
@@ -96,7 +140,9 @@ async function begin(username) {
     const roomId = await connection.fetchRoomId();
 
     if (!roomId) {
-      throw new Error('Could not resolve TikTok LIVE room ID.');
+      throw new Error(
+        'Could not resolve TikTok LIVE room ID.'
+      );
     }
 
     console.log(`Room ID for @${username}: ${roomId}`);
@@ -109,10 +155,21 @@ async function begin(username) {
     );
 
     console.log(
-      `Stream information keys:`,
+      'Data response keys:',
+      Object.keys(roomInfo?.data || {})
+    );
+
+    console.log(
+      'Nested data keys:',
+      Object.keys(roomInfo?.data?.data || {})
+    );
+
+    console.log(
+      'Stream information keys:',
       Object.keys(
         roomInfo?.stream_url ||
         roomInfo?.data?.stream_url ||
+        roomInfo?.data?.data?.stream_url ||
         {}
       )
     );
@@ -121,20 +178,19 @@ async function begin(username) {
 
     if (!streamUrl) {
       console.error(
-        'Stream response structure:',
+        'TikTok room response diagnostic:',
         JSON.stringify({
           roomId,
           roomInfoKeys: Object.keys(roomInfo || {}),
-          streamKeys: Object.keys(
-            roomInfo?.stream_url ||
-            roomInfo?.data?.stream_url ||
-            {}
+          dataKeys: Object.keys(roomInfo?.data || {}),
+          nestedDataKeys: Object.keys(
+            roomInfo?.data?.data || {}
           )
         }, null, 2)
       );
 
       throw new Error(
-        'TikTok LIVE detected, but no accessible HLS or FLV URL was returned.'
+        'TikTok LIVE detected, but no accessible HLS or FLV URL was returned. Check the TikTok response and Oracle VPS network restrictions.'
       );
     }
 
@@ -206,10 +262,14 @@ async function finish(username, reason = 'LIVE ended') {
     const stat = await fs.stat(recorder.output);
 
     if (stat.size < 1024) {
-      throw new Error('Recording is empty or too small.');
+      throw new Error(
+        'Recording is empty or too small.'
+      );
     }
 
-    const sizeMB = (stat.size / 1024 / 1024).toFixed(2);
+    const sizeMB = (
+      stat.size / 1024 / 1024
+    ).toFixed(2);
 
     await notify(
       `⏹ Recording finished\n\n` +
@@ -249,6 +309,7 @@ async function finish(username, reason = 'LIVE ended') {
       `Link expires in ${Math.round(config.b2.linkExpiry / 3600)} hours.`
     );
 
+    // Delete local file only after successful upload.
     await fs.unlink(recorder.output).catch(() => {});
 
   } catch (error) {
@@ -276,6 +337,7 @@ async function checkCreator(username) {
     if (isLive) {
       if (!active.has(username)) {
         console.log(`LIVE detected: @${username}`);
+
         await begin(username);
       } else {
         active.get(username).offlineCount = 0;
@@ -328,7 +390,7 @@ export async function runMonitor() {
       await checkCreator(username);
     }
 
-    // Finalize recordings for creators removed from monitoring.
+    // Finalize recordings for removed creators.
     for (const username of [...active.keys()]) {
       if (!creators.includes(username)) {
         await finish(username, 'Removed from monitoring');
@@ -360,9 +422,13 @@ export function startMonitor() {
 
 // Telegram command support.
 export async function stopCreator(username) {
-  await finish(username, 'Stopped manually through Telegram');
+  await finish(
+    username,
+    'Stopped manually through Telegram'
+  );
 }
 
+// Return currently active recordings.
 export function activeRecordings() {
   return [...active.keys()];
 }
